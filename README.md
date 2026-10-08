@@ -1,8 +1,9 @@
-# App Compiler — Backend API
+# SchemaForge — AI Schema Generation Platform [Live Link: SchemaForge](https://schemaforge-ai.vercel.app) | [GitHub: SchemaForge AI backend](https://github.com/Lithinpavansai/AI_Builder_Backend)
 
-> Natural Language → Production-Ready App Schema
+FastAPI · Next.js · Groq API · Pydantic v2 · Render · Vercel
 
-A multi-stage LLM pipeline that converts app descriptions into complete, validated, executable schemas.
+• Built a single-pass LLM pipeline (Intent Extraction → System Design → Schema Generation → Refinement) that converts natural language into UI, API, DB, and Auth schemas in one JSON output, consolidating 5 LLM calls into 1.
+• Built a 0–100 runtime validator (6 structural checks); tested on 23 prompts incl. adversarial cases: 100% completion, 84/100 average. A manual audit of 3 outputs caught a real cross-layer bug (Admin-only rule vs. config allowing Customer).
 
 ## 🏗️ Architecture
 User Prompt
@@ -96,7 +97,7 @@ POST /api/eval/run-single/N01
 ## 🏃 Local Setup
 
 ```bash
-git clone https://github.com/Pavansailithen/AI_Builder_Backend.git
+git clone https://github.com/Lithinpavansai/AI_Builder_Backend.git
 cd AI_Builder_Backend
 python -m venv venv
 venv\Scripts\activate
