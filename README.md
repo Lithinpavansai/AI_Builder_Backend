@@ -85,7 +85,7 @@ Proves output is executable with 6 checks:
 
 ## 📊 Evaluation
 
-20 test prompts (10 normal + 10 edge cases) covering:
+23 test prompts: 20 run locally (10 normal + 10 edge cases) and 3 run on the live deployment.
 - Normal: CRM, E-commerce, LMS, Healthcare, HR, Social Media
 - Edge cases: Vague, Single word, Conflicting, Incomplete, Gibberish, Non-English
 
