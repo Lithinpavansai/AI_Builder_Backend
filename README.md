@@ -2,8 +2,8 @@
 
 FastAPI · Next.js · Groq API · Pydantic v2 · Render · Vercel
 
-• Built a single-pass LLM pipeline (Intent Extraction → System Design → Schema Generation → Refinement) that converts natural language into UI, API, DB, and Auth schemas in one JSON output, consolidating 5 LLM calls into 1.
-• Built a 0–100 runtime validator (6 structural checks); tested on 23 prompts incl. adversarial cases: 100% completion, 84/100 average. A manual audit of 3 outputs caught a real cross-layer bug (Admin-only rule vs. config allowing Customer).
+• Built a multi-stage LLM pipeline (Intent Extraction → System Design → Schema Generation → Refinement) that converts natural language into UI, API, DB, and Auth schemas returned as one JSON output.
+• Built a 0-100 runtime validator (6 structural checks); scored 23 prompts (20 run locally, 3 on the live deployment) including edge cases (vague, conflicting, gibberish, non-English): 100% completion, 84/100 average. A manual audit of 3 outputs caught a real cross-layer bug (Admin-only rule vs. config allowing Customer).
 
 ## 🏗️ Architecture
 User Prompt
