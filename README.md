@@ -1,9 +1,10 @@
-# SchemaForge — AI Schema Generation Platform [Live Link: SchemaForge](https://schemaforge-ai.vercel.app) | [GitHub: SchemaForge AI backend](https://github.com/Lithinpavansai/AI_Builder_Backend)
+# SchemaForge — AI Schema Generation Platform
 
-FastAPI · Next.js · Groq API · Pydantic v2 · Render · Vercel
+[Live app](https://schemaforge-ai.vercel.app) | [Backend repo](https://github.com/Lithinpavansai/AI_Builder_backend)
 
-• Built a multi-stage LLM pipeline (Intent Extraction → System Design → Schema Generation → Refinement) that converts natural language into UI, API, DB, and Auth schemas returned as one JSON output.
-• Built a 0-100 runtime validator (6 structural checks); scored 23 prompts (20 run locally, 3 on the live deployment) including edge cases (vague, conflicting, gibberish, non-English): 100% completion, 84/100 average. A manual audit of 3 outputs caught a real cross-layer bug (Admin-only rule vs. config allowing Customer).
+SchemaForge turns a plain-English app description into validated UI, API, DB, and Auth schemas using a 4-stage LLM pipeline.
+
+FastAPI · Groq API · Pydantic v2 · Render
 
 ## 🏗️ Architecture
 User Prompt
