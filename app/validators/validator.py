@@ -28,20 +28,12 @@ def parse_pydantic_errors(e: PydanticValidationError) -> list[ValidationError]:
 # ---------------------------------------------------------------------------
 
 def validate_json(raw: str, stage: str):
+    from app.utils.llm import extract_balanced_json
     preview = raw.strip()[:200]
-
-    # Clean fences
-    cleaned = raw.strip()
-    if cleaned.startswith("```json"):
-        cleaned = cleaned[7:]
-    if cleaned.startswith("```"):
-        cleaned = cleaned[3:]
-    if cleaned.endswith("```"):
-        cleaned = cleaned[:-3]
-    cleaned = cleaned.strip()
+    extracted = extract_balanced_json(raw)
 
     try:
-        parsed = json.loads(cleaned)
+        parsed = json.loads(extracted)
         return ValidationReport(
             is_valid=True,
             stage=stage,
@@ -50,29 +42,17 @@ def validate_json(raw: str, stage: str):
             raw_input_preview=preview,
         ), parsed
     except json.JSONDecodeError as e:
-        # Try extracting JSON substring
-        try:
-            start = cleaned.index("{")
-            end = cleaned.rindex("}") + 1
-            parsed = json.loads(cleaned[start:end])
-            return ValidationReport(
-                is_valid=True,
-                stage=stage,
-                warnings=["JSON had extra text — extracted substring successfully"],
-                raw_input_preview=preview,
-            ), parsed
-        except Exception:
-            return ValidationReport(
-                is_valid=False,
-                stage=stage,
-                errors=[ValidationError(
-                    field="root",
-                    error_type="invalid_json",
-                    message=f"JSON parsing failed: {str(e)}",
-                    received_value=preview,
-                )],
-                raw_input_preview=preview,
-            ), None
+        return ValidationReport(
+            is_valid=False,
+            stage=stage,
+            errors=[ValidationError(
+                field="root",
+                error_type="invalid_json",
+                message=f"JSON parsing failed: {str(e)}",
+                received_value=preview,
+            )],
+            raw_input_preview=preview,
+        ), None
 
 
 # ---------------------------------------------------------------------------

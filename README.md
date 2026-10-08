@@ -79,16 +79,25 @@ Proves output is executable with 6 checks:
 | Layer | Technology |
 |---|---|
 | Framework | FastAPI |
-| LLM Provider | Groq (llama-3.3-70b-versatile) |
+| LLM Provider | Groq (`openai/gpt-oss-120b`) |
 | Validation | Pydantic v2 |
 | Async Jobs | Python asyncio |
 | Deployment | Render |
+
+> [!NOTE]
+> **Model Lifecycle Notice**: Groq periodically deprecates, retires, and renames models. The active LLM model ID is configured via the `GROQ_MODEL` environment variable (pinned to `openai/gpt-oss-120b`). All benchmark evaluation metrics and validator scores are directly tied to the model version named.
 
 ## 📊 Evaluation
 
 23 test prompts: 20 run locally (10 normal + 10 edge cases) and 3 run on the live deployment.
 - Normal: CRM, E-commerce, LMS, Healthcare, HR, Social Media
 - Edge cases: Vague, Single word, Conflicting, Incomplete, Gibberish, Non-English
+- Live deployment: Storefront catalog, prompt injection resistance, and zero-user login handling
+
+Run evaluation runner:
+```bash
+python -m app.evaluation.runner
+```
 
 Run single eval:
 ```bash
@@ -103,6 +112,7 @@ cd AI_Builder_Backend
 python -m venv venv
 venv\Scripts\activate
 pip install -r requirements.txt
-# Add GROQ_API_KEY to .env
+cp .env.example .env
+# Set GROQ_API_KEY in .env (GROQ_MODEL defaults to openai/gpt-oss-120b)
 python -m uvicorn app.main:app --reload
 ```

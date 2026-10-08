@@ -1,12 +1,11 @@
 # Stage 3 - Schema Generation
 
-import json
 from datetime import datetime
 
 from pydantic import ValidationError
 
 from app.utils.config import config
-from app.utils.gemini import call_gemini
+from app.utils.llm import call_llm_json_with_retry
 from app.validators.models import (
     AppSchema,
     APISchema,
@@ -20,54 +19,6 @@ from app.validators.models import (
     UISchema,
 )
 
-
-# ---------------------------------------------------------------------------
-# Helper: clean raw Gemini response and parse as dict
-# ---------------------------------------------------------------------------
-
-async def clean_and_parse(raw: str, stage_name: str) -> dict:
-    cleaned = raw.strip()
-    
-    # Robustly extract from markdown code blocks
-    if "```json" in cleaned:
-        parts = cleaned.split("```json")
-        if len(parts) > 1:
-            after_json = parts[1]
-            if "```" in after_json:
-                cleaned = after_json.split("```")[0].strip()
-    elif "```" in cleaned:
-        parts = cleaned.split("```")
-        for part in parts:
-            part_str = part.strip()
-            if part_str.startswith("{") and part_str.endswith("}"):
-                cleaned = part_str
-                break
-    else:
-        if cleaned.startswith("```json"):
-            cleaned = cleaned[7:]
-        elif cleaned.startswith("```"):
-            cleaned = cleaned[3:]
-        if cleaned.endswith("```"):
-            cleaned = cleaned[:-3]
-            
-    cleaned = cleaned.strip()
-
-    try:
-        return json.loads(cleaned)
-    except json.JSONDecodeError:
-        start = cleaned.find("{")
-        end = cleaned.rfind("}")
-        if start != -1 and end != -1 and end > start:
-            try:
-                return json.loads(cleaned[start : end + 1])
-            except json.JSONDecodeError:
-                pass
-        raise ValueError(f"{stage_name} returned invalid JSON: {raw[:200]}")
-
-
-# ---------------------------------------------------------------------------
-# Main: generate all schemas from intent + design
-# ---------------------------------------------------------------------------
 
 async def generate_schemas(
     intent: IntentOutput, design: SystemDesignOutput
@@ -172,7 +123,7 @@ Business Rules: {design.business_rules}
         '      }\n'
         '    ]\n'
         '  }\n'
-        "}\n"
+        '}\n'
         "\n"
         "Design Constraints:\n"
         "1. Every page defined in the list of pages must be generated in the ui.pages section. Every generated page must contain at least one UI component.\n"
@@ -185,18 +136,97 @@ Business Rules: {design.business_rules}
         "8. Every database table must contain an 'id' primary key column (integer type) and a 'created_at' column (datetime type).\n"
         "9. For every database table, generate standard CRUD endpoints (GET list, GET single, POST, PUT, DELETE) in the API endpoints list.\n"
         "10. Return ONLY valid JSON. Do not include markdown code blocks, explanation, or extra characters.\n"
-        "11. Be extremely concise in descriptions and field lists to minimize the JSON size and avoid truncation."
+        "11. Be concise in descriptions and field lists to ensure a complete schema output."
     )
 
-    full_prompt = f"{system_prompt}\n\nApp Design Context:\n{context}"
-    active_model = config.GROQ_MODEL.lower()
-    max_tokens = 2048
-    if "27b" in active_model or "qwen" in active_model:
-        max_tokens = 4096
-    elif "70b" in active_model:
-        max_tokens = 6144
-    raw_response = await call_gemini(full_prompt, max_tokens=max_tokens)
-    parsed_data = await clean_and_parse(raw_response, "Full Schema Generation")
+    # Call A: Generate UI and API layers
+    prompt_a = (
+        f"{system_prompt}\n\n"
+        f"App Design Context:\n{context}\n\n"
+        f"INSTRUCTION FOR THIS CALL:\n"
+        f"Return ONLY the keys: ui, api.\n"
+        f"Output minified JSON with no unnecessary whitespace or newlines. No newlines or indentation."
+    )
+
+    from app.utils.llm import get_safe_max_tokens, normalize_part
+    tpm_limit = getattr(config, "GROQ_TPM_LIMIT", 8000)
+    max_budget_allowed = tpm_limit - 300
+
+    prompt_a_est = len(prompt_a) // 4
+    safe_max_a, clamp_reason_a = get_safe_max_tokens(prompt_a, 4096, config.GROQ_MODEL)
+    sum_a = prompt_a_est + safe_max_a
+    print(
+        f"[STAGE 3 BUDGET - CALL A] Estimated Prompt Tokens: {prompt_a_est} | "
+        f"Max Tokens Clamped: {safe_max_a} | Sum: {sum_a} (Max Allowed: {max_budget_allowed}) | "
+        f"Status: {'Fits' if sum_a <= max_budget_allowed and safe_max_a >= 3000 else 'Exceeds budget'}",
+        flush=True
+    )
+    if safe_max_a < 3000:
+        deficit = 3000 - safe_max_a
+        raise ValueError(
+            f"Stage 3 Call A clamped to {safe_max_a} tokens (<3000 min required by {deficit} tokens). "
+            f"Prompt {prompt_a_est} tokens exceeds available TPM budget."
+        )
+
+    call_a_raw = await call_llm_json_with_retry(
+        prompt=prompt_a,
+        max_tokens=4096,
+        stage_name="Schema Generation (Part A: UI & API)",
+    )
+    call_a_data = normalize_part(call_a_raw, "A")
+
+    # Extract alignment context from Call A for Call B
+    endpoints = call_a_data.get("api", {}).get("endpoints", [])
+    ep_paths = [ep.get("path") for ep in endpoints if isinstance(ep, dict) and "path" in ep]
+    ep_roles = [r for ep in endpoints if isinstance(ep, dict) for r in ep.get("roles", [])]
+    page_roles = [r for page in call_a_data.get("ui", {}).get("pages", []) if isinstance(page, dict) for r in page.get("access", [])]
+    roles_used = sorted(list(set(design.roles + ep_roles + page_roles)))
+
+    alignment_context = (
+        f"Context and Alignment from Part A (UI & API):\n"
+        f"- Generated API Endpoint Paths: {ep_paths}\n"
+        f"- Roles used across UI and API: {roles_used}\n"
+        f"- Target Database Tables: {design.db_tables}\n"
+    )
+
+    # Call B: Generate Database, Auth, Business Logic layers
+    prompt_b = (
+        f"{system_prompt}\n\n"
+        f"App Design Context:\n{context}\n\n"
+        f"{alignment_context}\n"
+        f"INSTRUCTION FOR THIS CALL:\n"
+        f"Return ONLY the keys: database, auth, business_logic, and any other remaining top-level keys of the schema.\n"
+        f"Ensure table names and role names match the alignment context above.\n"
+        f"Output minified JSON with no unnecessary whitespace or newlines. No newlines or indentation.\n"
+        f'Return one JSON OBJECT, not an array, with exactly these top-level keys: {{"database":{{...}},"auth":{{...}},"business_logic":{{...}}}}. '
+        f'Do NOT include ui or api. Each key must be followed directly by its value (write "auth":{{...}}, never "auth", ":", {{...}}). Minified, no newlines.'
+    )
+
+    prompt_b_est = len(prompt_b) // 4
+    safe_max_b, clamp_reason_b = get_safe_max_tokens(prompt_b, 4096, config.GROQ_MODEL)
+    sum_b = prompt_b_est + safe_max_b
+    print(
+        f"[STAGE 3 BUDGET - CALL B] Estimated Prompt Tokens: {prompt_b_est} | "
+        f"Max Tokens Clamped: {safe_max_b} | Sum: {sum_b} (Max Allowed: {max_budget_allowed}) | "
+        f"Status: {'Fits' if sum_b <= max_budget_allowed and safe_max_b >= 3000 else 'Exceeds budget'}",
+        flush=True
+    )
+    if safe_max_b < 3000:
+        deficit = 3000 - safe_max_b
+        raise ValueError(
+            f"Stage 3 Call B clamped to {safe_max_b} tokens (<3000 min required by {deficit} tokens). "
+            f"Prompt {prompt_b_est} tokens exceeds available TPM budget."
+        )
+
+    call_b_raw = await call_llm_json_with_retry(
+        prompt=prompt_b,
+        max_tokens=4096,
+        stage_name="Schema Generation (Part B: DB & Auth)",
+    )
+    call_b_data = normalize_part(call_b_raw, "B")
+
+    # Merge A and B into one complete dictionary
+    parsed_data = {**call_a_data, **call_b_data}
 
     # Validate individual parts of the JSON with Pydantic
     try:
@@ -227,4 +257,3 @@ Business Rules: {design.business_rules}
     )
 
     return app_schema
-

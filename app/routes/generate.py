@@ -52,32 +52,31 @@ async def run_pipeline_background(job_id: str, prompt: str):
         }
         complete_job(job_id, result)
 
-        # Log to evaluation report
-        try:
-            from app.evaluation.runner import log_user_prompt
-            log_user_prompt(
-                prompt=prompt,
-                status="success",
-                schema_dict=refined.model_dump(),
-                latency=time.time() - start_time
-            )
-        except Exception as log_err:
-            print(f"Failed to log user prompt to evaluation report: {log_err}")
+        latency_sec = round(time.time() - start_time, 2)
+        update_job(job_id, latency_seconds=latency_sec)
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
+        latency_sec = round(time.time() - start_time, 2)
         fail_job(job_id, str(e))
-
-        # Log to evaluation report
-        try:
-            from app.evaluation.runner import log_user_prompt
-            log_user_prompt(
-                prompt=prompt,
-                status="failed",
-                error_msg=str(e),
-                latency=time.time() - start_time
-            )
-        except Exception as log_err:
-            print(f"Failed to log user prompt failure to evaluation report: {log_err}")
+        update_job(job_id, latency_seconds=latency_sec)
+    finally:
+        from app.utils.llm import job_token_tracker
+        s3_reasons = job_token_tracker.stage_3_finish_reasons
+        s3_reasons_str = f"Call A: {s3_reasons.get('Call A', 'N/A')}, Call B: {s3_reasons.get('Call B', 'N/A')}"
+        print(
+            f"\n[JOB SUMMARY] Job: {job_id} | "
+            f"Prompt Tokens: {job_token_tracker.prompt_tokens} | "
+            f"Completion Tokens: {job_token_tracker.completion_tokens} | "
+            f"Total Tokens: {job_token_tracker.total_tokens} | "
+            f"LLM Calls: {job_token_tracker.total_calls} | "
+            f"JSON Repairs: {job_token_tracker.total_repair_count} | "
+            f"Normalizations: {job_token_tracker.total_normalizations} | "
+            f"Total Sleep Time: {job_token_tracker.total_sleep_seconds:.1f}s | "
+            f"Stage 3 Finish Reasons: [{s3_reasons_str}]\n",
+            flush=True
+        )
 
 
 # --- MAIN PRODUCTION ROUTE ---
@@ -101,40 +100,32 @@ async def generate(request: GenerateRequest):
         result["prompt_received"] = request.prompt
         result["pipeline_version"] = "1.0.0"
 
-        # Log to evaluation report
-        try:
-            from app.evaluation.runner import log_user_prompt
-            status = "success" if result.get("status") in ("success", "success_with_warnings") else "failed"
-            log_user_prompt(
-                prompt=request.prompt,
-                status=status,
-                schema_dict=result.get("schema"),
-                error_msg=result.get("error"),
-                latency=time.time() - start_time
-            )
-        except Exception as log_err:
-            print(f"Failed to log user prompt to evaluation report: {log_err}")
-
         return JSONResponse(status_code=200, content=result)
     except Exception as e:
-        # Log to evaluation report
-        try:
-            from app.evaluation.runner import log_user_prompt
-            log_user_prompt(
-                prompt=request.prompt,
-                status="failed",
-                error_msg=str(e),
-                latency=time.time() - start_time
-            )
-        except Exception as log_err:
-            print(f"Failed to log user prompt failure to evaluation report: {log_err}")
-
+        import traceback
+        traceback.print_exc()
         return JSONResponse(status_code=500, content={
             "status": "failed",
             "error": str(e),
             "prompt_received": request.prompt,
             "pipeline_version": "1.0.0"
         })
+    finally:
+        from app.utils.llm import job_token_tracker
+        s3_reasons = job_token_tracker.stage_3_finish_reasons
+        s3_reasons_str = f"Call A: {s3_reasons.get('Call A', 'N/A')}, Call B: {s3_reasons.get('Call B', 'N/A')}"
+        print(
+            f"\n[JOB SUMMARY] "
+            f"Prompt Tokens: {job_token_tracker.prompt_tokens} | "
+            f"Completion Tokens: {job_token_tracker.completion_tokens} | "
+            f"Total Tokens: {job_token_tracker.total_tokens} | "
+            f"LLM Calls: {job_token_tracker.total_calls} | "
+            f"JSON Repairs: {job_token_tracker.total_repair_count} | "
+            f"Normalizations: {job_token_tracker.total_normalizations} | "
+            f"Total Sleep Time: {job_token_tracker.total_sleep_seconds:.1f}s | "
+            f"Stage 3 Finish Reasons: [{s3_reasons_str}]\n",
+            flush=True
+        )
 
 
 # --- PIPELINE INFO ROUTE ---
@@ -268,6 +259,7 @@ async def get_status(job_id: str):
         "progress": job["progress"],
         "created_at": job["created_at"],
         "completed_at": job["completed_at"],
+        "latency_seconds": job.get("latency_seconds"),
         "error": job["error"]
     }
 
@@ -284,18 +276,21 @@ async def get_result(job_id: str):
             "status": job["status"],
             "current_stage": job["current_stage"],
             "progress": job["progress"],
+            "latency_seconds": job.get("latency_seconds"),
             "message": "Pipeline still running. Try again shortly."
         })
     if job["status"] == "failed":
         return JSONResponse(status_code=500, content={
             "job_id": job_id,
             "status": "failed",
+            "latency_seconds": job.get("latency_seconds"),
             "error": job["error"]
         })
     return JSONResponse(status_code=200, content={
         "job_id": job_id,
         "status": "completed",
         "completed_at": job["completed_at"],
+        "latency_seconds": job.get("latency_seconds"),
         "result": job["result"]
     })
 

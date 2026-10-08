@@ -1,11 +1,9 @@
 # Stage 2 - System Design
 
-import json
-
 from pydantic import ValidationError
 
 from app.utils.config import config
-from app.utils.gemini import call_gemini
+from app.utils.llm import call_llm_json_with_retry
 from app.validators.models import IntentEntity, IntentOutput, SystemDesignOutput
 
 
@@ -47,39 +45,13 @@ async def design_system(intent: IntentOutput) -> SystemDesignOutput:
     )
 
     full_prompt = f"{system_prompt}\n\nStructured App Intent:\n{intent_context}"
+    max_tokens = 4096
 
-    active_model = config.GROQ_MODEL.lower()
-    max_tokens = 4096 if ("27b" in active_model or "qwen" in active_model) else 1024
-    # Call Gemini
-    raw_response = await call_gemini(full_prompt, max_tokens=max_tokens)
-
-    # Clean the response
-    cleaned = raw_response.strip()
-    if cleaned.startswith("```json"):
-        cleaned = cleaned[len("```json"):]
-    elif cleaned.startswith("```"):
-        cleaned = cleaned[len("```"):]
-    if cleaned.endswith("```"):
-        cleaned = cleaned[: -len("```")]
-    cleaned = cleaned.strip()
-
-    # Parse JSON
-    try:
-        parsed_data = json.loads(cleaned)
-    except json.JSONDecodeError:
-        start = cleaned.find("{")
-        end = cleaned.rfind("}")
-        if start != -1 and end != -1 and end > start:
-            try:
-                parsed_data = json.loads(cleaned[start : end + 1])
-            except json.JSONDecodeError:
-                raise ValueError(
-                    f"System design failed - invalid JSON: {raw_response[:200]}"
-                )
-        else:
-            raise ValueError(
-                f"System design failed - invalid JSON: {raw_response[:200]}"
-            )
+    parsed_data = await call_llm_json_with_retry(
+        prompt=full_prompt,
+        max_tokens=max_tokens,
+        stage_name="System Design",
+    )
 
     # Validate with Pydantic
     try:

@@ -17,7 +17,13 @@ class Config:
     PORT: int = int(os.getenv("PORT", 8000))
     MAX_PIPELINE_ATTEMPTS: int = 3
     MAX_REPAIR_ATTEMPTS: int = 3
-    GROQ_MODEL: str = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+    GROQ_MODEL: str = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
+    GROQ_TPM_LIMIT: int = int(os.getenv("GROQ_TPM_LIMIT", "8000"))
+    GROQ_OTPM_LIMIT: int | None = int(os.getenv("GROQ_OTPM_LIMIT")) if os.getenv("GROQ_OTPM_LIMIT") else None
+    REASONING_EFFORT: str | None = (
+        os.getenv("REASONING_EFFORT", "").strip()
+        or ("low" if os.getenv("GROQ_MODEL", "openai/gpt-oss-120b").startswith("openai/gpt-oss") else None)
+    )
     PIPELINE_VERSION: str = "1.0.0"
 
 
