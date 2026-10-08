@@ -1,6 +1,6 @@
 # SchemaForge — AI Schema Generation Platform
 
-[Live app](https://schemaforge-ai.vercel.app) | [Backend repo](https://github.com/Lithinpavansai/AI_Builder_backend)
+[Live app](https://schemaforge-ai.vercel.app) | [Frontend repo](https://github.com/Lithinpavansai/AI_Builder_frontend)
 
 SchemaForge turns a plain-English app description into validated UI, API, DB, and Auth schemas using a 4-stage LLM pipeline.
 
