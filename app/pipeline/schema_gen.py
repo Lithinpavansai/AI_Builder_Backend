@@ -127,16 +127,16 @@ Business Rules: {design.business_rules}
         "\n"
         "Design Constraints:\n"
         "1. Every page defined in the list of pages must be generated in the ui.pages section. Every generated page must contain at least one UI component.\n"
-        "2. Every page the user can navigate to must be backed by a working API endpoint. The page's route (excluding home, login, register, and empty routes) must match or be a substring of the API endpoint path. For example, a UI route '/projects' can correspond to '/api/v1/projects' or '/api/v1/projects/{id}'.\n"
-        "3. Every API endpoint that requires authentication must specify which user role(s) can access it, and those roles must be defined in the main Auth configuration roles list.\n"
-        "4. Database table names referenced by API endpoints must exactly match table names defined in the DB section (avoid singular/plural mismatches). Specifically, ensure the third segment of the API endpoint path (e.g., 'projects' in '/api/v1/projects') exactly matches the name of a database table.\n"
+        "2. Every page the user can navigate to must be backed by a working API endpoint. The page's route (excluding home, login, register, and empty routes) must match or be a substring of the API endpoint path.\n"
+        "3. Every API endpoint that requires authentication must specify which user role(s) can access it from the Auth roles list.\n"
+        "4. Database table names referenced by API endpoints must exactly match table names defined in the DB section.\n"
         "5. Foreign key relationships in the DB section must only point to tables that exist in the same schema.\n"
         "6. Any route referenced by a business rule must be a route that actually exists in the API section.\n"
         "7. All roles used in UI page access settings and API endpoints must be defined in the main Auth configuration roles list.\n"
         "8. Every database table must contain an 'id' primary key column (integer type) and a 'created_at' column (datetime type).\n"
-        "9. For every database table, generate standard CRUD endpoints (GET list, GET single, POST, PUT, DELETE) in the API endpoints list.\n"
-        "10. Return ONLY valid JSON. Do not include markdown code blocks, explanation, or extra characters.\n"
-        "11. Be concise in descriptions and field lists to ensure a complete schema output."
+        "9. Generate essential REST endpoints (GET list, POST create, GET/PUT/DELETE by ID) for main resources. Keep descriptions and validation rules concise.\n"
+        "10. Return ONLY valid, well-formed JSON. Do NOT output comments, asterisks, shorthand placeholders, or markdown fences.\n"
+        "11. Every element in the endpoints and pages arrays must be a complete JSON object, not a string or comment."
     )
 
     # Call A: Generate UI and API layers
@@ -144,12 +144,12 @@ Business Rules: {design.business_rules}
         f"{system_prompt}\n\n"
         f"App Design Context:\n{context}\n\n"
         f"INSTRUCTION FOR THIS CALL:\n"
-        f"Return ONLY the keys: ui, api.\n"
-        f"Output minified JSON with no unnecessary whitespace or newlines. No newlines or indentation."
+        f"Return ONLY a JSON object with top-level keys: ui, api.\n"
+        f"Ensure every endpoint in api.endpoints is a valid JSON object. Do not abbreviate or use comments. Output minified JSON."
     )
 
     from app.utils.llm import get_safe_max_tokens, normalize_part
-    tpm_limit = getattr(config, "GROQ_TPM_LIMIT", 8000)
+    tpm_limit = getattr(config, "GROQ_TPM_LIMIT", 12000)
     max_budget_allowed = tpm_limit - 300
 
     prompt_a_est = len(prompt_a) // 4
@@ -158,13 +158,13 @@ Business Rules: {design.business_rules}
     print(
         f"[STAGE 3 BUDGET - CALL A] Estimated Prompt Tokens: {prompt_a_est} | "
         f"Max Tokens Clamped: {safe_max_a} | Sum: {sum_a} (Max Allowed: {max_budget_allowed}) | "
-        f"Status: {'Fits' if sum_a <= max_budget_allowed and safe_max_a >= 3000 else 'Exceeds budget'}",
+        f"Status: {'Fits' if sum_a <= max_budget_allowed and safe_max_a >= 2000 else 'Exceeds budget'}",
         flush=True
     )
-    if safe_max_a < 3000:
-        deficit = 3000 - safe_max_a
+    if safe_max_a < 2000:
+        deficit = 2000 - safe_max_a
         raise ValueError(
-            f"Stage 3 Call A clamped to {safe_max_a} tokens (<3000 min required by {deficit} tokens). "
+            f"Stage 3 Call A clamped to {safe_max_a} tokens (<2000 min required by {deficit} tokens). "
             f"Prompt {prompt_a_est} tokens exceeds available TPM budget."
         )
 
@@ -203,24 +203,24 @@ Business Rules: {design.business_rules}
     )
 
     prompt_b_est = len(prompt_b) // 4
-    safe_max_b, clamp_reason_b = get_safe_max_tokens(prompt_b, 4096, config.GROQ_MODEL)
+    safe_max_b, clamp_reason_b = get_safe_max_tokens(prompt_b, 3500, config.GROQ_MODEL)
     sum_b = prompt_b_est + safe_max_b
     print(
         f"[STAGE 3 BUDGET - CALL B] Estimated Prompt Tokens: {prompt_b_est} | "
         f"Max Tokens Clamped: {safe_max_b} | Sum: {sum_b} (Max Allowed: {max_budget_allowed}) | "
-        f"Status: {'Fits' if sum_b <= max_budget_allowed and safe_max_b >= 3000 else 'Exceeds budget'}",
+        f"Status: {'Fits' if sum_b <= max_budget_allowed and safe_max_b >= 1800 else 'Exceeds budget'}",
         flush=True
     )
-    if safe_max_b < 3000:
-        deficit = 3000 - safe_max_b
+    if safe_max_b < 1800:
+        deficit = 1800 - safe_max_b
         raise ValueError(
-            f"Stage 3 Call B clamped to {safe_max_b} tokens (<3000 min required by {deficit} tokens). "
+            f"Stage 3 Call B clamped to {safe_max_b} tokens (<1800 min required by {deficit} tokens). "
             f"Prompt {prompt_b_est} tokens exceeds available TPM budget."
         )
 
     call_b_raw = await call_llm_json_with_retry(
         prompt=prompt_b,
-        max_tokens=4096,
+        max_tokens=3500,
         stage_name="Schema Generation (Part B: DB & Auth)",
     )
     call_b_data = normalize_part(call_b_raw, "B")

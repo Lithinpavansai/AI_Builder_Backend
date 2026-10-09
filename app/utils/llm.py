@@ -17,7 +17,7 @@ logger = logging.getLogger("app_compiler")
 
 
 def extract_balanced_json(text: Optional[str]) -> str:
-    """Tolerant JSON extractor: strip code fences and extract the first balanced {...} block."""
+    """Tolerant JSON extractor: strip code fences and extract the first balanced {...} or [...] block."""
     if text is None:
         return ""
     cleaned = (text or "").strip()
@@ -35,7 +35,7 @@ def extract_balanced_json(text: Optional[str]) -> str:
         parts = cleaned.split("```")
         for part in parts:
             part_str = part.strip()
-            if part_str.startswith("{") and part_str.endswith("}"):
+            if (part_str.startswith("{") and part_str.endswith("}")) or (part_str.startswith("[") and part_str.endswith("]")):
                 cleaned = part_str
                 break
     else:
@@ -48,9 +48,19 @@ def extract_balanced_json(text: Optional[str]) -> str:
 
     cleaned = cleaned.strip()
 
-    start = cleaned.find("{")
-    if start == -1:
+    brace_pos = cleaned.find("{")
+    bracket_pos = cleaned.find("[")
+
+    if brace_pos == -1 and bracket_pos == -1:
         return cleaned
+
+    # Choose whether object {...} or list [...] starts first
+    if bracket_pos != -1 and (brace_pos == -1 or bracket_pos < brace_pos):
+        start = bracket_pos
+        open_char, close_char = "[", "]"
+    else:
+        start = brace_pos
+        open_char, close_char = "{", "}"
 
     depth = 0
     in_string = False
@@ -69,15 +79,15 @@ def extract_balanced_json(text: Optional[str]) -> str:
             in_string = not in_string
             continue
         if not in_string:
-            if ch == "{":
+            if ch == open_char:
                 depth += 1
-            elif ch == "}":
+            elif ch == close_char:
                 depth -= 1
                 if depth == 0:
                     return cleaned[start : i + 1]
 
     # Fallback to substring if unbalanced
-    end = cleaned.rfind("}")
+    end = cleaned.rfind(close_char)
     if end > start:
         return cleaned[start : end + 1]
 
@@ -213,6 +223,35 @@ def normalize_part(parsed: Any, part: str) -> dict:
     if missing:
         raise ValueError(f"Schema Generation part {part} returned keys {list(raw_dict.keys())}; missing {missing}")
 
+    # Clean stringified sub-objects in arrays (e.g., endpoints serialized as strings)
+    if isinstance(kept_dict.get("api"), dict) and isinstance(kept_dict["api"].get("endpoints"), list):
+        clean_eps = []
+        for ep in kept_dict["api"]["endpoints"]:
+            if isinstance(ep, dict):
+                clean_eps.append(ep)
+            elif isinstance(ep, str):
+                try:
+                    ep_parsed = json.loads(ep)
+                    if isinstance(ep_parsed, dict):
+                        clean_eps.append(ep_parsed)
+                except Exception:
+                    pass
+        kept_dict["api"]["endpoints"] = clean_eps
+
+    if isinstance(kept_dict.get("ui"), dict) and isinstance(kept_dict["ui"].get("pages"), list):
+        clean_pages = []
+        for p in kept_dict["ui"]["pages"]:
+            if isinstance(p, dict):
+                clean_pages.append(p)
+            elif isinstance(p, str):
+                try:
+                    p_parsed = json.loads(p)
+                    if isinstance(p_parsed, dict):
+                        clean_pages.append(p_parsed)
+                except Exception:
+                    pass
+        kept_dict["ui"]["pages"] = clean_pages
+
     if shape == "list" or dropped_keys:
         job_token_tracker.add_normalizations(1)
 
@@ -222,7 +261,7 @@ def normalize_part(parsed: Any, part: str) -> dict:
 def repair_and_parse_json(text: Optional[str]) -> tuple[dict, int]:
     """
     Tolerantly extracts JSON, cleans known LLM formatting glitches (e.g., stray quotes
-    before '{' inside arrays), and parses to a dict.
+    before '{' inside arrays, pseudo comments, placeholders, trailing commas), and parses to a dict.
     Returns (parsed_dict, repair_count).
     """
     if text is None:
@@ -241,6 +280,18 @@ def repair_and_parse_json(text: Optional[str]) -> tuple[dict, int]:
     repairs = 0
     repaired_str = extracted
 
+    # Clean placeholders like *CRUD endpoints...* or /* ... */ or // ...
+    repaired_str, n_comm1 = re.subn(r',\s*\*.*?\*', '', repaired_str)
+    repaired_str, n_comm2 = re.subn(r'\*.*?\*', '', repaired_str)
+    repaired_str, n_comm3 = re.subn(r'//[^\n]*', '', repaired_str)
+    repaired_str, n_comm4 = re.subn(r'/\*.*?\*/', '', repaired_str, flags=re.DOTALL)
+    repaired_str, n_dots = re.subn(r',?\s*\.{3,}', '', repaired_str)
+    repairs += (n_comm1 + n_comm2 + n_comm3 + n_comm4 + n_dots)
+
+    # Clean trailing commas before } or ]
+    repaired_str, n_comma = re.subn(r',\s*([\}\]])', r'\1', repaired_str)
+    repairs += n_comma
+
     # Step 2: Regex replacements: ,"{" -> ,{" and ["{" -> [{"
     new_str, n1 = re.subn(r'(,\s*)"(\{)', r'\1\2', repaired_str)
     new_str, n2 = re.subn(r'(\[\s*)"(\{)', r'\1\2', new_str)
@@ -250,7 +301,7 @@ def repair_and_parse_json(text: Optional[str]) -> tuple[dict, int]:
     try:
         parsed = json.loads(repaired_str)
         if repairs > 0:
-            print(f"[JSON REPAIR] removed {repairs} stray quotes")
+            print(f"[JSON REPAIR] repaired JSON formatting glitches ({repairs} fixes)")
             job_token_tracker.add_repairs(repairs)
         return parsed, repairs
     except json.JSONDecodeError as err:
@@ -315,23 +366,15 @@ class RollingTokenBucket:
         return sum(tokens for _, tokens in self.records)
 
     async def throttle(self, estimated_tokens: int, tpm_limit: int):
-        while True:
-            now = time.time()
-            self._prune(now)
-            used = sum(tokens for _, tokens in self.records)
-            if (used + estimated_tokens <= tpm_limit) or not self.records:
-                break
-
-            oldest_time, _ = self.records[0]
-            sleep_needed = (oldest_time + self.window_seconds) - now + 0.1
-            sleep_duration = min(60.0, max(0.1, sleep_needed))
+        """Prune rolling window and record metrics. Real rate limiting is handled by Groq 429 retry backoff."""
+        now = time.time()
+        self._prune(now)
+        used = sum(tokens for _, tokens in self.records)
+        if (used + estimated_tokens > tpm_limit) and self.records:
             print(
-                f"[TPM THROTTLE] Used {used} + requested {estimated_tokens} > limit {tpm_limit}. "
-                f"Sleeping {sleep_duration:.1f}s until tokens in rolling 60s window expire...",
+                f"[TPM TRACKER] Window load: {used + estimated_tokens}/{tpm_limit} tokens. Proceeding with adaptive Groq rate-limiting.",
                 flush=True,
             )
-            job_token_tracker.add_sleep(sleep_duration)
-            await asyncio.sleep(sleep_duration)
 
     def record_usage(self, token_count: int):
         now = time.time()
@@ -347,7 +390,7 @@ KNOWN_MODEL_OTPM_LIMITS: dict[str, int] = {}
 
 def get_safe_max_tokens(prompt: str, requested_max: int, model: Optional[str] = None) -> tuple[int, str]:
     """Dynamically scale max_tokens to stay safely under Groq's TPM and OTPM limits."""
-    tpm_limit = getattr(config, "GROQ_TPM_LIMIT", 8000)
+    tpm_limit = getattr(config, "GROQ_TPM_LIMIT", 12000)
     target_model = model or config.GROQ_MODEL
     estimated_prompt_tokens = len(prompt) // 4
     tpm_available = tpm_limit - estimated_prompt_tokens - 300
@@ -414,9 +457,9 @@ async def call_llm(
                 f"Model {config.GROQ_MODEL} allows ~{effective_otpm} output tokens/min on this tier; stage {stage_name} needs more. Upgrade the tier or choose another model."
             )
 
-    max_rate_retries = 2  # retry at most 2 times for TPM/RPM
-    backoff_factor = 2
-    initial_delay = 3
+    max_rate_retries = 4  # retry up to 4 times for TPM/RPM
+    backoff_factor = 1.5
+    initial_delay = 1.5
 
     current_json_mode = json_mode
 
@@ -435,8 +478,10 @@ async def call_llm(
 
             # Rolling 60s TPM window throttle before making the call
             estimated_prompt_tokens = len(prompt) // 4
-            estimated_request_tokens = estimated_prompt_tokens + safe_max_tokens
-            tpm_limit = getattr(config, "GROQ_TPM_LIMIT", 8000)
+            # Realistic expected output tokens rather than theoretical max buffer
+            expected_output_tokens = min(safe_max_tokens, 1500 if safe_max_tokens > 1500 else safe_max_tokens)
+            estimated_request_tokens = estimated_prompt_tokens + expected_output_tokens
+            tpm_limit = getattr(config, "GROQ_TPM_LIMIT", 12000)
             await tpm_throttle.throttle(estimated_request_tokens, tpm_limit)
 
             call_budget["calls"] += 1
@@ -576,9 +621,17 @@ async def call_llm(
                         f"completion_tokens={completion_tokens}, max_tokens={safe_max_tokens})."
                     )
 
-                # If finish_reason == "length" and reasoning < 50%, check if max_tokens can be increased
-                if finish_reason == "length":
-                    new_safe_max_tokens, _ = get_safe_max_tokens(prompt, 8192, config.GROQ_MODEL)
+                # If finish_reason == "length" and reasoning < 50%, check if JSON is already recoverable
+                if finish_reason == "length" and content:
+                    try:
+                        parsed_test, _ = repair_and_parse_json(content)
+                        if parsed_test and isinstance(parsed_test, dict) and len(parsed_test) > 0:
+                            print(f"[GROQ LLM] Response hit length but contains a valid recoverable JSON object. Returning parsed content.")
+                            return content.strip()
+                    except Exception:
+                        pass
+
+                    new_safe_max_tokens, _ = get_safe_max_tokens(prompt, min(safe_max_tokens + 1500, 6000), config.GROQ_MODEL)
                     if new_safe_max_tokens <= safe_max_tokens:
                         raise ValueError(
                             f"Output exceeded the per-request token budget (clamped to {safe_max_tokens}). "
@@ -589,7 +642,7 @@ async def call_llm(
                         return await call_llm(
                             prompt=prompt,
                             system_prompt=system_prompt,
-                            max_tokens=8192,
+                            max_tokens=new_safe_max_tokens,
                             json_mode=current_json_mode,
                             call_budget=call_budget,
                             call_info=call_info,

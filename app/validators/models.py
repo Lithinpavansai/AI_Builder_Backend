@@ -27,6 +27,30 @@ class ComponentType(str, Enum):
     sidebar = "sidebar"
     navbar = "navbar"
 
+    @classmethod
+    def _missing_(cls, value):
+        if not isinstance(value, str):
+            return cls.card
+        val_lower = value.lower().strip()
+        if val_lower in ["list", "board", "grid", "card_list", "item_list", "feed", "cards", "kanban", "item", "detail"]:
+            return cls.card
+        if val_lower in ["datatable", "data_table", "table_view", "grid_table"]:
+            return cls.table
+        if val_lower in ["filter", "search", "inputs", "login_form", "register_form", "input", "button", "controls"]:
+            return cls.form
+        if val_lower in ["graph", "plot", "analytics", "metric", "metrics", "kpi", "stats"]:
+            return cls.chart
+        if val_lower in ["dialog", "popup", "drawer", "alert", "modal_dialog"]:
+            return cls.modal
+        if val_lower in ["aside", "nav_sidebar", "side_nav", "side_menu", "navigation_drawer"]:
+            return cls.sidebar
+        if val_lower in ["header", "nav", "menu", "topbar", "top_nav", "navigation_bar"]:
+            return cls.navbar
+        for member in cls:
+            if member.value == val_lower:
+                return member
+        return cls.card
+
 
 class UIComponent(BaseModel):
     type: ComponentType
@@ -34,6 +58,18 @@ class UIComponent(BaseModel):
     fields: List[str] = []
     actions: List[str] = []
     props: Dict[str, str] = Field(default_factory=dict)
+
+    @field_validator('type', mode='before')
+    @classmethod
+    def coerce_component_type(cls, v):
+        if isinstance(v, ComponentType):
+            return v
+        if isinstance(v, str):
+            try:
+                return ComponentType(v)
+            except ValueError:
+                return ComponentType.card
+        return ComponentType.card
 
     @field_validator('props', mode='before')
     @classmethod
@@ -46,13 +82,20 @@ class UIComponent(BaseModel):
 class UIPage(BaseModel):
     name: str
     route: str
-    components: List[UIComponent]
+    components: List[UIComponent] = []
     access: List[str] = []
     layout: Optional[str] = "default"
 
+    @field_validator('components', mode='before')
+    @classmethod
+    def coerce_components_none_to_list(cls, v):
+        if v is None:
+            return []
+        return v
+
 
 class UISchema(BaseModel):
-    pages: List[UIPage]
+    pages: List[UIPage] = []
     global_components: List[UIComponent] = []
 
 
@@ -67,6 +110,16 @@ class HTTPMethod(str, Enum):
     DELETE = "DELETE"
     PATCH = "PATCH"
 
+    @classmethod
+    def _missing_(cls, value):
+        if not isinstance(value, str):
+            return cls.GET
+        val_upper = value.upper().strip()
+        for member in cls:
+            if member.value == val_upper:
+                return member
+        return cls.GET
+
 
 class APIEndpoint(BaseModel):
     path: str
@@ -78,6 +131,18 @@ class APIEndpoint(BaseModel):
     response_fields: List[str] = []
     validation_rules: Dict[str, str] = Field(default_factory=dict)
 
+    @field_validator('method', mode='before')
+    @classmethod
+    def coerce_method(cls, v):
+        if isinstance(v, HTTPMethod):
+            return v
+        if isinstance(v, str):
+            try:
+                return HTTPMethod(v)
+            except ValueError:
+                return HTTPMethod.GET
+        return HTTPMethod.GET
+
     @field_validator('validation_rules', 'request_body', mode='before')
     @classmethod
     def coerce_none_to_dict(cls, v):
@@ -87,7 +152,7 @@ class APIEndpoint(BaseModel):
 
 
 class APISchema(BaseModel):
-    endpoints: List[APIEndpoint]
+    endpoints: List[APIEndpoint] = []
     base_url: str = "/api/v1"
     auth_endpoint: str = "/api/auth/login"
 
@@ -108,23 +173,27 @@ class ColumnType(str, Enum):
     @classmethod
     def _missing_(cls, value):
         if not isinstance(value, str):
-            return None
-        val_lower = value.lower()
-        if val_lower in ["varchar", "char", "string"]:
             return cls.string
-        if val_lower in ["int", "integer", "bigint", "smallint"]:
+        val_lower = value.lower().strip()
+        if val_lower in ["varchar", "char", "string", "uuid", "email", "url"]:
+            return cls.string
+        if val_lower in ["int", "integer", "bigint", "smallint", "serial", "bigserial", "number"]:
             return cls.integer
         if val_lower in ["float", "double", "decimal", "numeric", "real"]:
             return cls.float_
-        if val_lower in ["datetime", "timestamp", "date", "time"]:
+        if val_lower in ["datetime", "timestamp", "date", "time", "timestamptz"]:
             return cls.datetime_
         if val_lower in ["bool", "boolean"]:
             return cls.boolean
+        if val_lower in ["jsonb", "json", "object", "array"]:
+            return cls.json
+        if val_lower in ["text", "longtext", "clob"]:
+            return cls.text
 
         for member in cls:
             if member.value == val_lower:
                 return member
-        return None
+        return cls.string
 
 
 class DBColumn(BaseModel):

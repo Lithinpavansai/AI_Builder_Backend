@@ -18,7 +18,7 @@ class Config:
     MAX_PIPELINE_ATTEMPTS: int = 3
     MAX_REPAIR_ATTEMPTS: int = 3
     GROQ_MODEL: str = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
-    GROQ_TPM_LIMIT: int = int(os.getenv("GROQ_TPM_LIMIT", "8000"))
+    GROQ_TPM_LIMIT: int = int(os.getenv("GROQ_TPM_LIMIT", "12000"))
     GROQ_OTPM_LIMIT: int | None = int(os.getenv("GROQ_OTPM_LIMIT")) if os.getenv("GROQ_OTPM_LIMIT") else None
     REASONING_EFFORT: str | None = (
         os.getenv("REASONING_EFFORT", "").strip()

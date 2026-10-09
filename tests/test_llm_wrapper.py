@@ -207,9 +207,9 @@ class TestLLMWrapper(unittest.TestCase):
                 asyncio.run(llm.call_llm("test prompt", stage_name="Stage 1"))
 
             err = str(ctx.exception)
-            self.assertIn("rate limit exceeded after 2 retries", err)
-            # 1 initial + 2 retries = 3 calls
-            self.assertEqual(fake_client.chat.completions.create.call_count, 3)
+            self.assertIn("rate limit exceeded after 4 retries", err)
+            # 1 initial + 4 retries = 5 calls
+            self.assertEqual(fake_client.chat.completions.create.call_count, 5)
 
     def test_413_payload_too_large(self):
         """Test real 413 HTTP error: raises payload too large immediately without retry."""

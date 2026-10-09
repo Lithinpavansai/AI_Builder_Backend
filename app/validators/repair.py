@@ -52,7 +52,7 @@ Return ONLY valid JSON. No markdown, no explanation.
 
 Original user prompt: {prompt}"""
 
-    raw = await call_llm(repair_prompt, max_tokens=4096, json_mode=True)
+    raw = await call_llm(repair_prompt, max_tokens=1536, json_mode=True)
     report, parsed = validate_json(raw, "intent_repair")
     if not report.is_valid or parsed is None:
         return await repair_intent(prompt, report, attempt + 1)
@@ -104,7 +104,7 @@ APP CONTEXT:
 CURRENT SCHEMA WITH ERRORS:
 {json.dumps(current_schema, indent=2)[:3000]}"""
 
-    raw = await call_llm(repair_prompt, max_tokens=8192, json_mode=True)
+    raw = await call_llm(repair_prompt, max_tokens=3584, json_mode=True)
     report, parsed = validate_json(raw, f"{layer_name}_repair")
 
     if not report.is_valid or parsed is None:

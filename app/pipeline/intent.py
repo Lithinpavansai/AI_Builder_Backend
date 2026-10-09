@@ -40,7 +40,7 @@ async def extract_intent(prompt: str) -> IntentOutput:
     )
 
     full_prompt = f"{system_prompt}\n\nUser's app description:\n{prompt}"
-    max_tokens = 4096
+    max_tokens = 1200
 
     parsed_data = await call_llm_json_with_retry(
         prompt=full_prompt,

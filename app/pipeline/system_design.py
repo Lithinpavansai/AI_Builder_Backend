@@ -45,7 +45,7 @@ async def design_system(intent: IntentOutput) -> SystemDesignOutput:
     )
 
     full_prompt = f"{system_prompt}\n\nStructured App Intent:\n{intent_context}"
-    max_tokens = 4096
+    max_tokens = 1800
 
     parsed_data = await call_llm_json_with_retry(
         prompt=full_prompt,
