@@ -1,0 +1,293 @@
+{
+  "info": {
+    "_postman_id": "82df2707-c095-4200-9a52-58891d90f19f",
+    "name": "SchemaForge API Practice",
+    "description": "### Welcome to Postman! This is your first collection. \n\nCollections are your starting point for building and testing APIs. You can use this one to:\n\n• Group related requests\n• Test your API in real-world scenarios\n• Document and share your requests\n\nUpdate the name and overview whenever you’re ready to make it yours.\n\n[Learn more about Postman Collections.](https://learning.postman.com/docs/collections/collections-overview/)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "51637132",
+    "_collection_link": "https://go.postman.co/collection/51637132-82df2707-c095-4200-9a52-58891d90f19f?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "Get data",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status code is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": ""
+        },
+        "description": "This is a GET request and it is used to \"get\" data from an endpoint. There is no request body for a GET request, but you can use query parameters to help specify the resource you want data on (e.g., in this request, we have `id=1`).\n\nA successful GET response will have a `200 OK` status, and should include some kind of response body - for example, HTML web content or JSON data."
+      },
+      "response": []
+    },
+    {
+      "name": "Post data",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Successful POST request\", function () {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+              "});",
+              ""
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n\t\"name\": \"Add your name in the body\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": ""
+        },
+        "description": "This is a POST request, submitting data to an API via the request body. This request submits JSON data, and the data is reflected in the response.\n\nA successful POST request typically returns a `200 OK` or `201 Created` response code."
+      },
+      "response": []
+    },
+    {
+      "name": "Echo GET",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "https://postman-echo.com/get?name=lithin",
+          "protocol": "https",
+          "host": [
+            "postman-echo",
+            "com"
+          ],
+          "path": [
+            "get"
+          ],
+          "query": [
+            {
+              "key": "name",
+              "value": "lithin"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Pipeline Info",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              ""
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"status is 200\", () => pm.response.to.have.status(200));\r\npm.test(\"responds in under 2s\", () => pm.expect(pm.response.responseTime).to.be.below(2000));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/generate/info",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "generate",
+            "info"
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "Pipeline Info",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/generate/info",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "generate",
+                "info"
+              ]
+            }
+          },
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "key": ":status",
+              "value": "200"
+            },
+            {
+              "key": "date",
+              "value": "Wed, 21 Oct 2026 13:26:38 GMT"
+            },
+            {
+              "key": "content-type",
+              "value": "application/json"
+            },
+            {
+              "key": "content-length",
+              "value": "265"
+            },
+            {
+              "key": "content-encoding",
+              "value": "br"
+            },
+            {
+              "key": "rndr-id",
+              "value": "7037387b-67dd-473d"
+            },
+            {
+              "key": "server",
+              "value": "cloudflare"
+            },
+            {
+              "key": "vary",
+              "value": "Origin, Accept-Encoding"
+            },
+            {
+              "key": "x-process-time",
+              "value": "0.001"
+            },
+            {
+              "key": "x-render-origin-server",
+              "value": "uvicorn"
+            },
+            {
+              "key": "cf-cache-status",
+              "value": "DYNAMIC"
+            },
+            {
+              "key": "cf-ray",
+              "value": "a4e098571e132127-MAA"
+            },
+            {
+              "key": "alt-svc",
+              "value": "h3=\":443\"; ma=86400"
+            }
+          ],
+          "cookie": [],
+          "body": "{\n  \"pipeline_version\": \"1.0.0\",\n  \"stages\": [\n    {\n      \"stage\": 1,\n      \"name\": \"Intent Extraction\",\n      \"model\": \"llama-3.3-70b-versatile\"\n    },\n    {\n      \"stage\": 2,\n      \"name\": \"System Design\",\n      \"model\": \"llama-3.3-70b-versatile\"\n    },\n    {\n      \"stage\": 3,\n      \"name\": \"Schema Generation\",\n      \"model\": \"llama-3.3-70b-versatile\",\n      \"llm_calls\": 5\n    },\n    {\n      \"stage\": 4,\n      \"name\": \"Refinement\",\n      \"model\": \"llama-3.3-70b-versatile\"\n    }\n  ],\n  \"total_llm_calls_per_request\": 8,\n  \"max_pipeline_attempts\": 3,\n  \"max_repair_attempts_per_stage\": 3,\n  \"output_layers\": [\n    \"ui\",\n    \"api\",\n    \"database\",\n    \"auth\",\n    \"business_logic\"\n  ],\n  \"validation\": \"pydantic v2\",\n  \"llm_provider\": \"groq\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Status - bad job id",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/status/fake-id",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "status",
+            "fake-id"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Generate - invalid payload",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"wrong\": \"field\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/generate/async",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "generate",
+            "async"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Auth - 401 then 200",
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            {
+              "key": "username",
+              "value": "postman",
+              "type": "string"
+            },
+            {
+              "key": "password",
+              "value": "password",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "https://postman-echo.com/basic-auth",
+          "protocol": "https",
+          "host": [
+            "postman-echo",
+            "com"
+          ],
+          "path": [
+            "basic-auth"
+          ]
+        }
+      },
+      "response": []
+    }
+  ]
+}
