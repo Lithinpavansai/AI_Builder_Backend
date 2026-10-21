@@ -1,6 +1,7 @@
 import asyncio
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
+from app.utils.config import config
 from app.utils.job_store import create_job, update_job, get_job, complete_job, fail_job
 from app.validators.models import GenerateRequest
 from app.validators.orchestrator import run_pipeline
@@ -136,10 +137,10 @@ async def pipeline_info():
     return {
         "pipeline_version": "1.0.0",
         "stages": [
-            {"stage": 1, "name": "Intent Extraction", "model": "llama-3.3-70b-versatile"},
-            {"stage": 2, "name": "System Design", "model": "llama-3.3-70b-versatile"},
-            {"stage": 3, "name": "Schema Generation", "model": "llama-3.3-70b-versatile", "llm_calls": 5},
-            {"stage": 4, "name": "Refinement", "model": "llama-3.3-70b-versatile"}
+            {"stage": 1, "name": "Intent Extraction", "model": config.GROQ_MODEL},
+            {"stage": 2, "name": "System Design", "model": config.GROQ_MODEL},
+            {"stage": 3, "name": "Schema Generation", "model": config.GROQ_MODEL, "llm_calls": 5},
+            {"stage": 4, "name": "Refinement", "model": config.GROQ_MODEL}
         ],
         "total_llm_calls_per_request": 8,
         "max_pipeline_attempts": 3,
