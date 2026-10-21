@@ -439,7 +439,8 @@ async def call_llm(
         call_budget = {"calls": 0, "max_calls": 3}
 
     if call_budget["calls"] >= call_budget["max_calls"]:
-        raise ValueError(f"Stage exceeded maximum allowed LLM calls ({call_budget['max_calls']})")
+        err_detail = f" (last error: {call_budget['last_error']})" if call_budget.get("last_error") else ""
+        raise ValueError(f"Stage exceeded maximum allowed LLM calls ({call_budget['max_calls']}){err_detail}")
 
     messages = []
     if system_prompt:
@@ -474,7 +475,8 @@ async def call_llm(
                 extra_params["reasoning_effort"] = effective_reasoning_effort
 
             if call_budget["calls"] >= call_budget["max_calls"]:
-                raise ValueError(f"Stage exceeded maximum allowed LLM calls ({call_budget['max_calls']})")
+                err_detail = f" (last error: {call_budget['last_error']})" if call_budget.get("last_error") else ""
+                raise ValueError(f"Stage exceeded maximum allowed LLM calls ({call_budget['max_calls']}){err_detail}")
 
             # Rolling 60s TPM window throttle before making the call
             estimated_prompt_tokens = len(prompt) // 4
@@ -670,6 +672,10 @@ async def call_llm(
                         failed_gen_text = str(failed_gen_val) if failed_gen_val is not None else ""
 
             if is_json_validate_error:
+                err_code = err_dict.get("code") if isinstance(err_dict, dict) else None
+                err_msg = err_dict.get("message", str(e)) if isinstance(err_dict, dict) else str(e)
+                call_budget["last_error"] = f"{err_code}: {err_msg}" if err_code else f"json_validate_failed: {err_msg}"
+
                 # None-safe check on failed_generation text with deterministic repair
                 if failed_gen_text and failed_gen_text.strip():
                     try:
@@ -692,6 +698,7 @@ async def call_llm(
                 is_413 = True
 
             if is_413:
+                call_budget["last_error"] = f"payload_too_large: {str(e)}"
                 raise ValueError(f"Groq API payload too large (413): {str(e)}")
 
             # 3. Rate Limit HTTP 429
@@ -709,6 +716,8 @@ async def call_llm(
                     err_dict = e.body.get("error", {})
                     if isinstance(err_dict, dict) and "message" in err_dict:
                         err_msg = err_dict["message"]
+
+                call_budget["last_error"] = f"rate_limit: {err_msg}"
 
                 err_msg_lower = err_msg.lower()
 
@@ -777,6 +786,8 @@ async def call_llm(
                 job_token_tracker.add_sleep(sleep_seconds)
                 await asyncio.sleep(sleep_seconds)
             else:
+                if not (isinstance(e, ValueError) and "Stage exceeded" in str(e)):
+                    call_budget["last_error"] = str(e)
                 raise ValueError(f"Groq API call failed: {str(e)}")
 
     raise ValueError(f"Groq API call failed: exceeded maximum retry attempts ({max_rate_retries}).")
@@ -845,8 +856,9 @@ async def call_llm_json_with_retry(
 
     raw_str = last_raw_response or ""
     tail_chars = raw_str[-300:] if len(raw_str) > 300 else raw_str
+    err_detail = f" (last error: {call_budget['last_error']})" if call_budget.get("last_error") else ""
     raise ValueError(
-        f"{stage_name} failed - JSON parse error: {last_parse_error} "
+        f"{stage_name} failed - JSON parse error: {last_parse_error}{err_detail} "
         f"[finish_reason={last_finish_reason}, completion_tokens={last_completion_tokens}, max_tokens={last_safe_max_tokens}]. "
         f"Last 300 chars of raw response:\n{tail_chars}"
     )
