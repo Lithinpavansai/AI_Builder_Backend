@@ -60,7 +60,9 @@ Import `SchemaForge-Postman-Collection.json`. The `base_url` variable is already
 | Pipeline Info | 200 OK | The service is up and responding fast |
 | Status - bad job id | 404 | An unknown job ID returns a clear error |
 | Generate - invalid payload | 422 | A body missing the required `prompt` field is rejected before any LLM call |
-| Auth - 401 then 200 | 401, then 200 | A 401 vs authenticated call (uses Postman's public test API) |
+| Auth - 401 no credentials | 401 | A call without credentials is rejected (uses Postman's public test API) |
+| Auth - 200 with credentials | 200 | The same call with credentials succeeds |
+| Echo GET | 200 | Connectivity check against Postman's public echo API |
 
 ## Evaluation
 
