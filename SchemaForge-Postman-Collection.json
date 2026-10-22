@@ -72,7 +72,7 @@
       },
       "response": [
         {
-          "name": "Pipeline Info",
+          "name": "Pipeline Info - 200 OK",
           "originalRequest": {
             "method": "GET",
             "header": [],
@@ -88,6 +88,8 @@
               ]
             }
           },
+          "status": "OK",
+          "code": 200,
           "_postman_previewlanguage": "json",
           "header": [
             {
@@ -96,7 +98,7 @@
             },
             {
               "key": "date",
-              "value": "Wed, 21 Oct 2026 13:26:38 GMT"
+              "value": "Thu, 22 Oct 2026 10:47:45 GMT"
             },
             {
               "key": "content-type",
@@ -104,7 +106,7 @@
             },
             {
               "key": "content-length",
-              "value": "265"
+              "value": "261"
             },
             {
               "key": "content-encoding",
@@ -112,7 +114,7 @@
             },
             {
               "key": "rndr-id",
-              "value": "7037387b-67dd-473d"
+              "value": "453fe9ff-d9c4-453a"
             },
             {
               "key": "server",
@@ -136,7 +138,7 @@
             },
             {
               "key": "cf-ray",
-              "value": "a4e098571e132127-MAA"
+              "value": "a4e7ecff0da77fdf-MAA"
             },
             {
               "key": "alt-svc",
@@ -144,7 +146,7 @@
             }
           ],
           "cookie": [],
-          "body": "{\n  \"pipeline_version\": \"1.0.0\",\n  \"stages\": [\n    {\n      \"stage\": 1,\n      \"name\": \"Intent Extraction\",\n      \"model\": \"llama-3.3-70b-versatile\"\n    },\n    {\n      \"stage\": 2,\n      \"name\": \"System Design\",\n      \"model\": \"llama-3.3-70b-versatile\"\n    },\n    {\n      \"stage\": 3,\n      \"name\": \"Schema Generation\",\n      \"model\": \"llama-3.3-70b-versatile\",\n      \"llm_calls\": 5\n    },\n    {\n      \"stage\": 4,\n      \"name\": \"Refinement\",\n      \"model\": \"llama-3.3-70b-versatile\"\n    }\n  ],\n  \"total_llm_calls_per_request\": 8,\n  \"max_pipeline_attempts\": 3,\n  \"max_repair_attempts_per_stage\": 3,\n  \"output_layers\": [\n    \"ui\",\n    \"api\",\n    \"database\",\n    \"auth\",\n    \"business_logic\"\n  ],\n  \"validation\": \"pydantic v2\",\n  \"llm_provider\": \"groq\"\n}"
+          "body": "{\n  \"pipeline_version\": \"1.0.0\",\n  \"stages\": [\n    {\n      \"stage\": 1,\n      \"name\": \"Intent Extraction\",\n      \"model\": \"openai/gpt-oss-120b\"\n    },\n    {\n      \"stage\": 2,\n      \"name\": \"System Design\",\n      \"model\": \"openai/gpt-oss-120b\"\n    },\n    {\n      \"stage\": 3,\n      \"name\": \"Schema Generation\",\n      \"model\": \"openai/gpt-oss-120b\",\n      \"llm_calls\": 5\n    },\n    {\n      \"stage\": 4,\n      \"name\": \"Refinement\",\n      \"model\": \"openai/gpt-oss-120b\"\n    }\n  ],\n  \"total_llm_calls_per_request\": 8,\n  \"max_pipeline_attempts\": 3,\n  \"max_repair_attempts_per_stage\": 3,\n  \"output_layers\": [\n    \"ui\",\n    \"api\",\n    \"database\",\n    \"auth\",\n    \"business_logic\"\n  ],\n  \"validation\": \"pydantic v2\",\n  \"llm_provider\": \"groq\"\n}"
         }
       ]
     },
@@ -218,7 +220,18 @@
       "response": []
     },
     {
-      "name": "Auth - 401 then 200",
+      "name": "Auth - 200 with credentials",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"200\", () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ],
       "request": {
         "auth": {
           "type": "basic",
@@ -234,6 +247,39 @@
               "type": "string"
             }
           ]
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "https://postman-echo.com/basic-auth",
+          "protocol": "https",
+          "host": [
+            "postman-echo",
+            "com"
+          ],
+          "path": [
+            "basic-auth"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Auth - 401 no credentials",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"401\", () => pm.response.to.have.status(401));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "noauth"
         },
         "method": "GET",
         "header": [],
